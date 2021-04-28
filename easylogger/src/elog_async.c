@@ -47,8 +47,14 @@
 #define ELOG_ASYNC_OUTPUT_PTHREAD_PRIORITY       (sched_get_priority_max(SCHED_RR) - 1)
 #endif
 /* output thread poll get log buffer size  */
+#ifndef ELOG_ASYNC_LINE_OUTPUT
+#ifndef ELOG_ASYNC_POLL_GET_LOG_BUF_SIZE
+#define ELOG_ASYNC_POLL_GET_LOG_BUF_SIZE         (ELOG_ASYNC_OUTPUT_BUF_SIZE - 4)
+#endif
+#else
 #ifndef ELOG_ASYNC_POLL_GET_LOG_BUF_SIZE
 #define ELOG_ASYNC_POLL_GET_LOG_BUF_SIZE         (ELOG_LINE_BUF_SIZE - 4)
+#endif
 #endif
 #endif /* ELOG_ASYNC_OUTPUT_USING_PTHREAD */
 
@@ -56,7 +62,7 @@
 static sem_t output_notice;
 /* asynchronous output pthread thread */
 static pthread_t async_output_thread;
-#endif /* ELOG_ASYNC_OUTPUT_USING_PTHREAD */
+#endif /* ELOG_ASYNC_OUTPUT_ENABLE */
 
 /* the highest output level for async mode, other level will sync output */
 #ifdef ELOG_ASYNC_OUTPUT_LVL
@@ -74,6 +80,8 @@ static pthread_t async_output_thread;
 
 /* Initialize OK flag */
 static bool init_ok = false;
+/* thread running flag */
+static bool thread_running = false;
 /* asynchronous output mode enabled flag */
 static bool is_enabled = false;
 /* asynchronous output mode's ring buffer */
@@ -283,7 +291,7 @@ static void *async_output(void *arg) {
     size_t get_log_size = 0;
     static char poll_get_buf[ELOG_ASYNC_POLL_GET_LOG_BUF_SIZE];
 
-    while(true) {
+    while(thread_running) {
         /* waiting log */
         sem_wait(&output_notice);
         /* polling gets and outputs the log */
@@ -334,8 +342,10 @@ ElogErrCode elog_async_init(void) {
 
     sem_init(&output_notice, 0, 0);
 
+    thread_running = true;
+
     pthread_attr_init(&thread_attr);
-    pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
+    //pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
     pthread_attr_setstacksize(&thread_attr, ELOG_ASYNC_OUTPUT_PTHREAD_STACK_SIZE);
     pthread_attr_setschedpolicy(&thread_attr, SCHED_RR);
     thread_sched_param.sched_priority = ELOG_ASYNC_OUTPUT_PTHREAD_PRIORITY;
@@ -348,5 +358,29 @@ ElogErrCode elog_async_init(void) {
 
     return result;
 }
+
+/**
+ * asynchronous output mode deinitialize
+ *
+ */
+void elog_async_deinit(void) {
+    if (!init_ok) {
+        return ;
+    }
+
+#ifdef ELOG_ASYNC_OUTPUT_USING_PTHREAD
+    thread_running = false;
+
+    elog_async_output_notice();
+
+    pthread_join(async_output_thread, NULL);
+    
+    sem_destroy(&output_notice);
+#endif
+
+    init_ok = false;
+}
+
+
 
 #endif /* ELOG_ASYNC_OUTPUT_ENABLE */

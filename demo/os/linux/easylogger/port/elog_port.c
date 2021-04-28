@@ -55,6 +55,19 @@ ElogErrCode elog_port_init(void) {
 }
 
 /**
+ * EasyLogger port deinitialize
+ *
+ */
+void elog_port_deinit(void) {
+#ifdef ELOG_FILE_ENABLE
+    elog_file_deinit();
+#endif
+
+    pthread_mutex_destroy(&output_lock);
+}
+
+
+/**
  * output log port interface
  *
  * @param log output of log
@@ -62,7 +75,10 @@ ElogErrCode elog_port_init(void) {
  */
 void elog_port_output(const char *log, size_t size) {
     /* output to terminal */
+#ifdef ELOG_TERMINAL_ENABLE
     printf("%.*s", (int)size, log);
+#endif
+
 #ifdef ELOG_FILE_ENABLE
     /* write the file */
     elog_file_write(log, size);
@@ -91,16 +107,14 @@ void elog_port_output_unlock(void) {
  */
 const char *elog_port_get_time(void) {
     static char cur_system_time[24] = { 0 };
-    time_t timep;
-    struct tm *p;
 
-    time(&timep);
-    p = localtime(&timep);
-    if (p == NULL) {
-        return "";
-    }
-    snprintf(cur_system_time, 18, "%02d-%02d %02d:%02d:%02d", p->tm_mon + 1, p->tm_mday,
-            p->tm_hour, p->tm_min, p->tm_sec);
+    time_t cur_t;
+    struct tm cur_tm;
+
+    time(&cur_t);
+    localtime_r(&cur_t, &cur_tm);
+
+    strftime(cur_system_time, sizeof(cur_system_time), "%Y-%m-%d %T", &cur_tm);
 
     return cur_system_time;
 }

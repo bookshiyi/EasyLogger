@@ -131,7 +131,7 @@ void elog_file_write(const char *log, size_t size)
 
     fwrite(log, size, 1, fp);
 
-#ifdef ELOG_FILE_FLUSH_CAHCE_ENABLE
+#ifdef ELOG_FILE_FLUSH_CACHE_ENABLE
     fflush(fp);
 #endif
 
@@ -143,23 +143,32 @@ void elog_file_deinit(void)
 {
     ELOG_ASSERT(init_ok);
 
+    ElogFileCfg cfg = {NULL, 0, 0};
+
+    elog_file_config(&cfg);
+
     elog_file_port_deinit();
-    fclose(fp);
+
+    init_ok = false;
 }
 
 void elog_file_config(ElogFileCfg *cfg)
 {
-    if (fp) {
-        fclose(fp);
-    }
-
     elog_file_port_lock();
 
-    local_cfg.name = cfg->name;
-    local_cfg.max_size = cfg->max_size;
-    local_cfg.max_rotate = cfg->max_rotate;
+    if (fp) {
+        fclose(fp);
+        fp = NULL;
+    }
 
-    fp = fopen(local_cfg.name, "a+");
+    if (cfg != NULL) {
+        local_cfg.name = cfg->name;
+        local_cfg.max_size = cfg->max_size;
+        local_cfg.max_rotate = cfg->max_rotate;
+
+        if (local_cfg.name != NULL && strlen(local_cfg.name) > 0)
+            fp = fopen(local_cfg.name, "a+");
+    }
 
     elog_file_port_unlock();
 }
